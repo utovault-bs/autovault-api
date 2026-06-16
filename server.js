@@ -79,6 +79,17 @@ const migrate = async () => {
   } catch (err) {
     console.error('Migration 005 warning:', err.message);
   }
+  // Seed price drops for demo cars (runs once, idempotent)
+  try {
+    await pool.query(`UPDATE cars SET previous_price = 35000, price_dropped_at = NOW() - INTERVAL '7 days' WHERE id = 1 AND previous_price IS NULL`);
+    await pool.query(`UPDATE cars SET previous_price = 55000, price_dropped_at = NOW() - INTERVAL '14 days' WHERE id = 2 AND previous_price IS NULL`);
+    await pool.query(`UPDATE cars SET previous_price = 130000, price_dropped_at = NOW() - INTERVAL '3 days' WHERE id = 3 AND previous_price IS NULL`);
+    await pool.query(`UPDATE cars SET previous_price = 48000, price_dropped_at = NOW() - INTERVAL '10 days' WHERE id = 8 AND previous_price IS NULL`);
+    await pool.query(`UPDATE cars SET previous_price = 7000, price_dropped_at = NOW() - INTERVAL '5 days' WHERE id = 12 AND previous_price IS NULL`);
+    console.log('Price drops seeded for demo cars');
+  } catch (err) {
+    console.error('Price drop seed warning:', err.message);
+  }
 };
 migrate();
 
