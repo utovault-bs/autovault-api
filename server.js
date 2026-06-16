@@ -79,6 +79,13 @@ const migrate = async () => {
   } catch (err) {
     console.error('Migration 005 warning:', err.message);
   }
+  try {
+    const sql6 = require('fs').readFileSync(require('path').join(__dirname, 'db', 'migrations', '006_car_models.sql'), 'utf8');
+    await pool.query(sql6);
+    console.log('Migration 006 (car_models) complete');
+  } catch (err) {
+    console.error('Migration 006 warning:', err.message);
+  }
   // Seed price drops for demo cars (runs once, idempotent)
   try {
     await pool.query(`UPDATE cars SET previous_price = 35000, price_dropped_at = NOW() - INTERVAL '7 days' WHERE id = 1 AND previous_price IS NULL`);
@@ -149,18 +156,22 @@ app.get('/api/auth/me', authenticate, async (req, res) => {
 // Cars
 app.get('/api/cars', async (req, res) => {
   try {
-    const { search, make, minYear, maxYear, minPrice, maxPrice, transmission, fuel_type, fuelType, body_style, sortBy = 'newest', page = 1, limit = 12 } = req.query;
+    const { search, make, model, minYear, maxYear, minPrice, maxPrice, maxMileage, color, condition, transmission, fuel_type, fuelType, body_style, sortBy = 'newest', page = 1, limit = 12 } = req.query;
     let where = ['c.status = $1']; let params = ['available']; let pc = 1;
     if (search) { where.push(`(c.make ILIKE $${++pc} OR c.model ILIKE $${pc} OR c.description ILIKE $${pc})`); params.push(`%${search}%`); }
     if (make) { where.push(`c.make = $${++pc}`); params.push(make); }
+    if (model) { where.push(`c.model = $${++pc}`); params.push(model); }
     if (minYear) { where.push(`c.year >= $${++pc}`); params.push(minYear); }
     if (maxYear) { where.push(`c.year <= $${++pc}`); params.push(maxYear); }
     if (minPrice) { where.push(`c.price >= $${++pc}`); params.push(minPrice); }
     if (maxPrice) { where.push(`c.price <= $${++pc}`); params.push(maxPrice); }
+    if (maxMileage) { where.push(`c.mileage <= $${++pc}`); params.push(maxMileage); }
+    if (color) { where.push(`c.color = $${++pc}`); params.push(color); }
+    if (condition) { where.push(`c.condition = $${++pc}`); params.push(condition); }
     if (transmission) { where.push(`c.transmission = $${++pc}`); params.push(transmission); }
     const ft = fuel_type || fuelType; if (ft) { where.push(`c.fuel_type = $${++pc}`); params.push(ft); }
     if (body_style) { where.push(`c.body_style = $${++pc}`); params.push(body_style); }
-    const orderMap = { newest: 'c.created_at DESC', price_asc: 'c.price ASC', price_desc: 'c.price DESC', mileage_asc: 'c.mileage ASC', year_desc: 'c.year DESC' };
+    const orderMap = { newest: 'c.created_at DESC', price_asc: 'c.price ASC', price_desc: 'c.price DESC', mileage_asc: 'c.mileage ASC', mileage_desc: 'c.mileage DESC', year_desc: 'c.year DESC', year_asc: 'c.year ASC' };
     const orderBy = orderMap[sortBy] || 'c.created_at DESC';
     const countQ = `SELECT COUNT(*) FROM cars c WHERE ${where.join(' AND ')}`;
     const { rows: countRows } = await req.db.query(countQ, params);
@@ -214,6 +225,16 @@ app.get('/api/cars/recommended', async (req, res) => {
   } catch (err) {
     console.error('GET /api/cars/recommended error:', err);
     res.status(500).json({ message: 'Failed' });
+  }
+});
+
+app.get('/api/models/:make', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT model FROM car_models WHERE LOWER(make) = LOWER($1) ORDER BY model', [req.params.make]);
+    res.json(result.rows.map(r => r.model));
+  } catch (err) {
+    console.error('Models fetch error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch models' });
   }
 });
 

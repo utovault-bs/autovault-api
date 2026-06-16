@@ -1,0 +1,40 @@
+CREATE TABLE IF NOT EXISTS car_models (
+  id SERIAL PRIMARY KEY,
+  make VARCHAR(100) NOT NULL,
+  model VARCHAR(100) NOT NULL,
+  UNIQUE(make, model)
+);
+
+INSERT INTO car_models (make, model) VALUES
+('Acura','ILX'),('Acura','Integra'),('Acura','MDX'),('Acura','NSX'),('Acura','RDX'),('Acura','RLX'),('Acura','TLX'),
+('Audi','A3'),('Audi','A4'),('Audi','A5'),('Audi','A6'),('Audi','A7'),('Audi','A8'),('Audi','e-tron'),('Audi','Q3'),('Audi','Q5'),('Audi','Q7'),('Audi','Q8'),('Audi','R8'),('Audi','RS5'),('Audi','S3'),('Audi','S4'),('Audi','S5'),('Audi','SQ5'),('Audi','TT'),
+('BMW','2 Series'),('BMW','3 Series'),('BMW','4 Series'),('BMW','5 Series'),('BMW','7 Series'),('BMW','8 Series'),('BMW','i4'),('BMW','i7'),('BMW','iX'),('BMW','M2'),('BMW','M3'),('BMW','M4'),('BMW','M5'),('BMW','X1'),('BMW','X3'),('BMW','X5'),('BMW','X6'),('BMW','X7'),('BMW','Z4'),
+('Buick','Enclave'),('Buick','Encore'),('Buick','Encore GX'),('Buick','Envision'),('Buick','LaCrosse'),('Buick','Regal'),
+('Cadillac','CT4'),('Cadillac','CT5'),('Cadillac','CTS'),('Cadillac','Escalade'),('Cadillac','XT4'),('Cadillac','XT5'),('Cadillac','XT6'),('Cadillac','Lyriq'),
+('Chevrolet','Blazer'),('Chevrolet','Camaro'),('Chevrolet','Colorado'),('Chevrolet','Corvette'),('Chevrolet','Equinox'),('Chevrolet','Express'),('Chevrolet','Impala'),('Chevrolet','Malibu'),('Chevrolet','Silverado 1500'),('Chevrolet','Silverado 2500HD'),('Chevrolet','Suburban'),('Chevrolet','Tahoe'),('Chevrolet','Traverse'),('Chevrolet','Trax'),('Chevrolet','Spark'),('Chevrolet','Cruze'),('Chevrolet','Volt'),
+('Chrysler','300'),('Chrysler','Pacifica'),('Chrysler','Voyager'),
+('Dodge','Challenger'),('Dodge','Charger'),('Dodge','Durango'),('Dodge','Grand Caravan'),('Dodge','Journey'),
+('Ford','Bronco'),('Ford','Edge'),('Ford','Escape'),('Ford','Expedition'),('Ford','Explorer'),('Ford','F-150'),('Ford','F-250'),('Ford','F-350'),('Ford','Focus'),('Ford','Maverick'),('Ford','Mustang'),('Ford','Mustang Mach-E'),('Ford','Ranger'),('Ford','Transit'),('Ford','Fusion'),
+('GMC','Acadia'),('GMC','Canyon'),('GMC','Hummer EV'),('GMC','Sierra 1500'),('GMC','Sierra 2500HD'),('GMC','Terrain'),('GMC','Yukon'),
+('Honda','Accord'),('Honda','Civic'),('Honda','CR-V'),('Honda','Fit'),('Honda','HR-V'),('Honda','Odyssey'),('Honda','Passport'),('Honda','Pilot'),('Honda','Ridgeline'),
+('Hyundai','Accent'),('Hyundai','Elantra'),('Hyundai','Ioniq 5'),('Hyundai','Ioniq 6'),('Hyundai','Kona'),('Hyundai','Palisade'),('Hyundai','Santa Fe'),('Hyundai','Sonata'),('Hyundai','Tucson'),('Hyundai','Venue'),
+('Infiniti','Q50'),('Infiniti','Q60'),('Infiniti','QX50'),('Infiniti','QX60'),('Infiniti','QX80'),
+('Jaguar','E-Pace'),('Jaguar','F-Pace'),('Jaguar','F-Type'),('Jaguar','I-Pace'),('Jaguar','XE'),('Jaguar','XF'),
+('Jeep','Cherokee'),('Jeep','Compass'),('Jeep','Gladiator'),('Jeep','Grand Cherokee'),('Jeep','Renegade'),('Jeep','Wrangler'),
+('Kia','Carnival'),('Kia','EV6'),('Kia','Forte'),('Kia','K5'),('Kia','Niro'),('Kia','Optima'),('Kia','Rio'),('Kia','Sedona'),('Kia','Seltos'),('Kia','Sorento'),('Kia','Soul'),('Kia','Sportage'),('Kia','Telluride'),
+('Land Rover','Defender'),('Land Rover','Discovery'),('Land Rover','Discovery Sport'),('Land Rover','Evoque'),('Land Rover','Range Rover'),('Land Rover','Range Rover Sport'),('Land Rover','Range Rover Velar'),
+('Lexus','ES'),('Lexus','GX'),('Lexus','IS'),('Lexus','LC'),('Lexus','LS'),('Lexus','LX'),('Lexus','NX'),('Lexus','RC'),('Lexus','RX'),('Lexus','UX'),
+('Lincoln','Aviator'),('Lincoln','Corsair'),('Lincoln','Nautilus'),('Lincoln','Navigator'),('Lincoln','MKZ'),
+('Mazda','CX-30'),('Mazda','CX-5'),('Mazda','CX-50'),('Mazda','CX-9'),('Mazda','CX-90'),('Mazda','Mazda3'),('Mazda','MX-5 Miata'),
+('Mercedes-Benz','A-Class'),('Mercedes-Benz','C-Class'),('Mercedes-Benz','CLA'),('Mercedes-Benz','E-Class'),('Mercedes-Benz','G-Class'),('Mercedes-Benz','GLA'),('Mercedes-Benz','GLB'),('Mercedes-Benz','GLC'),('Mercedes-Benz','GLE'),('Mercedes-Benz','GLS'),('Mercedes-Benz','S-Class'),('Mercedes-Benz','SL'),('Mercedes-Benz','EQB'),('Mercedes-Benz','EQE'),('Mercedes-Benz','EQS'),
+('Mini','Clubman'),('Mini','Convertible'),('Mini','Countryman'),('Mini','Hardtop'),
+('Mitsubishi','Eclipse Cross'),('Mitsubishi','Mirage'),('Mitsubishi','Outlander'),('Mitsubishi','Outlander Sport'),
+('Nissan','Altima'),('Nissan','Armada'),('Nissan','Frontier'),('Nissan','Kicks'),('Nissan','Leaf'),('Nissan','Maxima'),('Nissan','Murano'),('Nissan','Pathfinder'),('Nissan','Rogue'),('Nissan','Sentra'),('Nissan','Titan'),('Nissan','Versa'),('Nissan','370Z'),
+('Porsche','718 Cayman'),('Porsche','718 Boxster'),('Porsche','911'),('Porsche','Cayenne'),('Porsche','Macan'),('Porsche','Panamera'),('Porsche','Taycan'),
+('Ram','1500'),('Ram','2500'),('Ram','3500'),('Ram','ProMaster'),
+('Subaru','Ascent'),('Subaru','BRZ'),('Subaru','Crosstrek'),('Subaru','Forester'),('Subaru','Impreza'),('Subaru','Legacy'),('Subaru','Outback'),('Subaru','WRX'),
+('Tesla','Cybertruck'),('Tesla','Model 3'),('Tesla','Model S'),('Tesla','Model X'),('Tesla','Model Y'),
+('Toyota','4Runner'),('Toyota','Camry'),('Toyota','Corolla'),('Toyota','Grand Highlander'),('Toyota','Highlander'),('Toyota','Land Cruiser'),('Toyota','Prius'),('Toyota','RAV4'),('Toyota','Sequoia'),('Toyota','Sienna'),('Toyota','Tacoma'),('Toyota','Tundra'),('Toyota','Venza'),
+('Volkswagen','Arteon'),('Volkswagen','Atlas'),('Volkswagen','Golf'),('Volkswagen','Golf GTI'),('Volkswagen','ID.4'),('Volkswagen','Jetta'),('Volkswagen','Passat'),('Volkswagen','Taos'),('Volkswagen','Tiguan'),
+('Volvo','C40'),('Volvo','S60'),('Volvo','S90'),('Volvo','V60'),('Volvo','V90'),('Volvo','XC40'),('Volvo','XC60'),('Volvo','XC90')
+ON CONFLICT DO NOTHING;
