@@ -1,0 +1,20 @@
+ALTER TABLE cars ADD COLUMN IF NOT EXISTS city VARCHAR(100);
+ALTER TABLE cars ADD COLUMN IF NOT EXISTS state VARCHAR(100);
+ALTER TABLE cars ADD COLUMN IF NOT EXISTS zip VARCHAR(20);
+ALTER TABLE cars ADD COLUMN IF NOT EXISTS latitude DECIMAL(10,7);
+ALTER TABLE cars ADD COLUMN IF NOT EXISTS longitude DECIMAL(10,7);
+
+UPDATE cars SET city = 'Phoenix', state = 'AZ', zip = '85001', latitude = 33.4484, longitude = -112.0740 WHERE id = 1 AND city IS NULL;
+UPDATE cars SET city = 'Miami', state = 'FL', zip = '33101', latitude = 25.7617, longitude = -80.1918 WHERE id = 2 AND city IS NULL;
+UPDATE cars SET city = 'Los Angeles', state = 'CA', zip = '90001', latitude = 33.9425, longitude = -118.2551 WHERE id = 3 AND city IS NULL;
+UPDATE cars SET city = 'Dallas', state = 'TX', zip = '75201', latitude = 32.7767, longitude = -96.7970 WHERE id = 4 AND city IS NULL;
+UPDATE cars SET city = 'Chicago', state = 'IL', zip = '60601', latitude = 41.8781, longitude = -87.6298 WHERE id = 5 AND city IS NULL;
+UPDATE cars SET city = 'Seattle', state = 'WA', zip = '98101', latitude = 47.6062, longitude = -122.3321 WHERE id = 6 AND city IS NULL;
+UPDATE cars SET city = 'New York', state = 'NY', zip = '10001', latitude = 40.7128, longitude = -74.0060 WHERE id = 7 AND city IS NULL;
+UPDATE cars SET city = 'Denver', state = 'CO', zip = '80201', latitude = 39.7392, longitude = -104.9903 WHERE id = 8 AND city IS NULL;
+UPDATE cars SET city = 'Atlanta', state = 'GA', zip = '30301', latitude = 33.7490, longitude = -84.3880 WHERE id = 9 AND city IS NULL;
+UPDATE cars SET city = 'Portland', state = 'OR', zip = '97201', latitude = 45.5152, longitude = -122.6784 WHERE id = 10 AND city IS NULL;
+UPDATE cars SET city = 'Houston', state = 'TX', zip = '77001', latitude = 29.7604, longitude = -95.3698 WHERE id = 11 AND city IS NULL;
+UPDATE cars SET city = 'Nashville', state = 'TN', zip = '37201', latitude = 36.1627, longitude = -86.7816 WHERE id = 12 AND city IS NULL;
+UPDATE cars SET city = 'San Francisco', state = 'CA', zip = '94101', latitude = 37.7749, longitude = -122.4194 WHERE id = 13 AND city IS NULL;
+UPDATE cars SET city = 'Boston', state = 'MA', zip = '02101', latitude = 42.3601, longitude = -71.0589 WHERE id = 14 AND city IS NULL;

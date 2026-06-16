@@ -86,6 +86,13 @@ const migrate = async () => {
   } catch (err) {
     console.error('Migration 006 warning:', err.message);
   }
+  try {
+    const sql7 = require('fs').readFileSync(require('path').join(__dirname, 'db', 'migrations', '007_car_location.sql'), 'utf8');
+    await pool.query(sql7);
+    console.log('Migration 007 (car_location) complete');
+  } catch (err) {
+    console.error('Migration 007 warning:', err.message);
+  }
   // Seed price drops for demo cars (runs once, idempotent)
   try {
     await pool.query(`UPDATE cars SET previous_price = 35000, price_dropped_at = NOW() - INTERVAL '7 days' WHERE id = 1 AND previous_price IS NULL`);
@@ -156,7 +163,7 @@ app.get('/api/auth/me', authenticate, async (req, res) => {
 // Cars
 app.get('/api/cars', async (req, res) => {
   try {
-    const { search, make, model, minYear, maxYear, minPrice, maxPrice, maxMileage, color, condition, transmission, fuel_type, fuelType, body_style, sortBy = 'newest', page = 1, limit = 12 } = req.query;
+    const { search, make, model, minYear, maxYear, minPrice, maxPrice, maxMileage, color, condition, transmission, fuel_type, fuelType, body_style, lat, lng, radius, sortBy = 'newest', page = 1, limit = 12 } = req.query;
     let where = ['c.status = $1']; let params = ['available']; let pc = 1;
     if (search) { where.push(`(c.make ILIKE $${++pc} OR c.model ILIKE $${pc} OR c.description ILIKE $${pc})`); params.push(`%${search}%`); }
     if (make) { where.push(`c.make = $${++pc}`); params.push(make); }
@@ -166,18 +173,26 @@ app.get('/api/cars', async (req, res) => {
     if (minPrice) { where.push(`c.price >= $${++pc}`); params.push(minPrice); }
     if (maxPrice) { where.push(`c.price <= $${++pc}`); params.push(maxPrice); }
     if (maxMileage) { where.push(`c.mileage <= $${++pc}`); params.push(maxMileage); }
-    if (color) { where.push(`c.color = $${++pc}`); params.push(color); }
+    if (color) { where.push(`c.exterior_color = $${++pc}`); params.push(color); }
     if (condition) { where.push(`c.condition = $${++pc}`); params.push(condition); }
     if (transmission) { where.push(`c.transmission = $${++pc}`); params.push(transmission); }
     const ft = fuel_type || fuelType; if (ft) { where.push(`c.fuel_type = $${++pc}`); params.push(ft); }
     if (body_style) { where.push(`c.body_style = $${++pc}`); params.push(body_style); }
-    const orderMap = { newest: 'c.created_at DESC', price_asc: 'c.price ASC', price_desc: 'c.price DESC', mileage_asc: 'c.mileage ASC', mileage_desc: 'c.mileage DESC', year_desc: 'c.year DESC', year_asc: 'c.year ASC' };
+    let distanceSelect = '';
+    if (lat && lng && radius) {
+      const plat = parseFloat(lat), plng = parseFloat(lng), pradius = parseFloat(radius);
+      const distCol = `(3959 * acos(cos(radians($${++pc})) * cos(radians(c.latitude)) * cos(radians(c.longitude) - radians($${++pc})) + sin(radians(${pc - 1})) * sin(radians(c.latitude))))`;
+      where.push(`${distCol} <= $${++pc} AND c.latitude IS NOT NULL AND c.longitude IS NOT NULL`);
+      distanceSelect = `, ${distCol} AS distance`;
+      params.push(plat, plng, pradius);
+    }
+    const orderMap = { newest: 'c.created_at DESC', price_asc: 'c.price ASC', price_desc: 'c.price DESC', mileage_asc: 'c.mileage ASC', mileage_desc: 'c.mileage DESC', year_desc: 'c.year DESC', year_asc: 'c.year ASC', distance: 'distance ASC' };
     const orderBy = orderMap[sortBy] || 'c.created_at DESC';
     const countQ = `SELECT COUNT(*) FROM cars c WHERE ${where.join(' AND ')}`;
     const { rows: countRows } = await req.db.query(countQ, params);
     const total = parseInt(countRows[0].count);
     const offset = (page - 1) * limit;
-    const dataQ = `SELECT c.*, u.name as seller_name, (SELECT url FROM car_images WHERE car_id = c.id ORDER BY position LIMIT 1) as main_image FROM cars c JOIN users u ON c.seller_id = u.id WHERE ${where.join(' AND ')} ORDER BY ${orderBy} LIMIT $${++pc} OFFSET $${++pc}`;
+    const dataQ = `SELECT c.*, u.name as seller_name, (SELECT url FROM car_images WHERE car_id = c.id ORDER BY position LIMIT 1) as main_image${distanceSelect} FROM cars c JOIN users u ON c.seller_id = u.id WHERE ${where.join(' AND ')} ORDER BY ${orderBy} LIMIT $${++pc} OFFSET $${++pc}`;
     const { rows: cars } = await req.db.query(dataQ, [...params, limit, offset]);
     const avgPrices = await req.db.query('SELECT make, AVG(price) as avg_price FROM cars WHERE status = $1 GROUP BY make', ['available']);
     const avgMap = {};
