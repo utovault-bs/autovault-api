@@ -276,13 +276,13 @@ app.get('/api/cars/:id', async (req, res) => {
 });
 
 app.post('/api/cars', authenticate, async (req, res) => {
-  const { make, model, year, trim, price, mileage, transmission, fuel_type, fuelType, engine, exterior_color, exteriorColor, interior_color, interiorColor, vin, condition, description, body_style, bodyStyle, drivetrain, images } = req.body;
+  const { make, model, year, trim, price, mileage, transmission, fuel_type, fuelType, engine, exterior_color, exteriorColor, interior_color, interiorColor, vin, condition, description, body_style, bodyStyle, drivetrain, city, state, zip, latitude, longitude, images } = req.body;
   try {
     await req.db.query('BEGIN');
     const ft = fuel_type || fuelType; const ec = exterior_color || exteriorColor; const ic = interior_color || interiorColor;
     const bs = body_style || bodyStyle;
     const dt = drivetrain;
-    const carResult = await req.db.query('INSERT INTO cars (seller_id, make, model, year, trim, price, mileage, transmission, fuel_type, engine, exterior_color, interior_color, vin, condition, description, body_style, drivetrain) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING *', [req.user.id, make, model, year, trim, price, mileage, transmission, ft, engine, ec, ic, vin, condition, description, bs, dt]);
+    const carResult = await req.db.query('INSERT INTO cars (seller_id, make, model, year, trim, price, mileage, transmission, fuel_type, engine, exterior_color, interior_color, vin, condition, description, body_style, drivetrain, city, state, zip, latitude, longitude) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22) RETURNING *', [req.user.id, make, model, year, trim, price, mileage, transmission, ft, engine, ec, ic, vin, condition, description, bs, dt, city, state, zip, latitude, longitude]);
     const car = carResult.rows[0];
     if (images?.length) for (let i = 0; i < images.length; i++) {
       const url = typeof images[i] === 'string' ? images[i] : images[i].url;
