@@ -163,7 +163,7 @@ app.get('/api/auth/me', authenticate, async (req, res) => {
 // Cars
 app.get('/api/cars', async (req, res) => {
   try {
-    const { search, make, model, minYear, maxYear, minPrice, maxPrice, maxMileage, color, condition, transmission, fuel_type, fuelType, body_style, lat, lng, radius, sortBy = 'newest', page = 1, limit = 12 } = req.query;
+    const { search, make, model, minYear, maxYear, minPrice, maxPrice, maxMileage, color, condition, transmission, fuel_type, fuelType, body_style, lat, lng, radius, seller_id, sortBy = 'newest', page = 1, limit = 12 } = req.query;
     let where = ['c.status = $1']; let params = ['available']; let pc = 1;
     if (search) { where.push(`(c.make ILIKE $${++pc} OR c.model ILIKE $${pc} OR c.description ILIKE $${pc})`); params.push(`%${search}%`); }
     if (make) { where.push(`c.make = $${++pc}`); params.push(make); }
@@ -178,6 +178,7 @@ app.get('/api/cars', async (req, res) => {
     if (transmission) { where.push(`c.transmission = $${++pc}`); params.push(transmission); }
     const ft = fuel_type || fuelType; if (ft) { where.push(`c.fuel_type = $${++pc}`); params.push(ft); }
     if (body_style) { where.push(`c.body_style = $${++pc}`); params.push(body_style); }
+    if (seller_id) { where.push(`c.seller_id = $${++pc}`); params.push(parseInt(seller_id)); }
     let distanceSelect = '';
     if (lat && lng && radius) {
       const plat = parseFloat(lat), plng = parseFloat(lng), pradius = parseFloat(radius);
