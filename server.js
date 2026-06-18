@@ -23,6 +23,7 @@ const allowedOrigins = [
   process.env.CLIENT_URL,
   'http://localhost:5173',
   'http://localhost:4173',
+  'https://autovault-three.vercel.app',
   'https://autovault-web.vercel.app'
 ].filter(Boolean);
 app.use(cors({
