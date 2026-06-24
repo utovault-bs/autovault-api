@@ -31,6 +31,13 @@ app.use(cors({
   credentials: true
 }));
 app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 100 }));
+app.use((req, res, next) => {
+  if (req.headers['stripe-signature']) {
+    req.rawBody = '';
+    req.on('data', chunk => { req.rawBody += chunk; });
+    req.on('end', next);
+  } else next();
+});
 app.use(express.json({ limit: '10mb' }));
 app.use(morgan('combined'));
 
@@ -94,6 +101,20 @@ const migrate = async () => {
   } catch (err) {
     console.error('Migration 007 warning:', err.message);
   }
+  try {
+    const sql8 = require('fs').readFileSync(require('path').join(__dirname, 'db', 'migrations', '008_subscription_tiers.sql'), 'utf8');
+    await pool.query(sql8);
+    console.log('Migration 008 (subscription_tiers) complete');
+  } catch (err) {
+    if (err.code !== '42P07') console.error('Migration 008 warning:', err.message);
+  }
+  try {
+    const sql9 = require('fs').readFileSync(require('path').join(__dirname, 'db', 'migrations', '009_user_subscriptions.sql'), 'utf8');
+    await pool.query(sql9);
+    console.log('Migration 009 (user_subscriptions) complete');
+  } catch (err) {
+    if (err.code !== '42P07' && err.code !== '42701') console.error('Migration 009 warning:', err.message);
+  }
   // Seed price drops for demo cars (runs once, idempotent)
   try {
     await pool.query(`UPDATE cars SET previous_price = 35000, price_dropped_at = NOW() - INTERVAL '7 days' WHERE id = 1 AND previous_price IS NULL`);
@@ -134,13 +155,23 @@ app.get('/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().
 
 // Auth
 app.post('/api/auth/register', async (req, res) => {
-  const { email, password, name } = req.body;
+  const { email, password, name, dealership_name, phone } = req.body;
   const hashed = await bcrypt.hash(password, 10);
   try {
-    const result = await req.db.query('INSERT INTO users (email, password, name) VALUES ($1, $2, $3) RETURNING id, email, name, role', [email, hashed, name]);
+    const result = await req.db.query('INSERT INTO users (email, password, name, dealership_name, phone) VALUES ($1, $2, $3, $4, $5) RETURNING id, email, name, role', [email, hashed, name, dealership_name || null, phone || null]);
     const user = result.rows[0];
+    // Create Stripe customer
+    let stripeCustomerId = null;
+    try {
+      const customer = await stripe.customers.create({ email, name, metadata: { userId: String(user.id) } });
+      stripeCustomerId = customer.id;
+      await req.db.query('UPDATE users SET stripe_customer_id = $1 WHERE id = $2', [stripeCustomerId, user.id]);
+    } catch (stripeErr) {
+      console.error('Stripe customer creation failed:', stripeErr.message);
+    }
     const token = jwt.sign({ id: user.id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '7d' });
-    res.json({ token, user });
+    const { rows } = await req.db.query('SELECT u.id, u.email, u.name, u.role, u.avatar, u.dealership_name, u.subscription_tier_id, u.subscription_status, u.listings_used, t.name as tier_name, t.listings_limit FROM users u LEFT JOIN subscription_tiers t ON u.subscription_tier_id = t.id WHERE u.id = $1', [user.id]);
+    res.json({ token, user: rows[0] });
   } catch (err) {
     if (err.code === '23505') res.status(400).json({ message: 'Email exists' });
     else res.status(500).json({ message: 'Registration failed' });
@@ -153,12 +184,13 @@ app.post('/api/auth/login', async (req, res) => {
   const user = result.rows[0];
   if (!user || !await bcrypt.compare(password, user.password)) return res.status(401).json({ message: 'Invalid credentials' });
   const token = jwt.sign({ id: user.id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '7d' });
-  res.json({ token, user: { id: user.id, email: user.email, name: user.name, role: user.role } });
+  const { rows } = await req.db.query('SELECT u.id, u.email, u.name, u.role, u.avatar, u.dealership_name, u.subscription_tier_id, u.subscription_status, u.listings_used, t.name as tier_name, t.listings_limit FROM users u LEFT JOIN subscription_tiers t ON u.subscription_tier_id = t.id WHERE u.id = $1', [user.id]);
+  res.json({ token, user: rows[0] });
 });
 
 app.get('/api/auth/me', authenticate, async (req, res) => {
-  const result = await req.db.query('SELECT id, email, name, role, avatar FROM users WHERE id = $1', [req.user.id]);
-  res.json({ user: result.rows[0] });
+  const { rows } = await req.db.query('SELECT u.id, u.email, u.name, u.role, u.avatar, u.dealership_name, u.subscription_tier_id, u.subscription_status, u.listings_used, t.name as tier_name, t.listings_limit FROM users u LEFT JOIN subscription_tiers t ON u.subscription_tier_id = t.id WHERE u.id = $1', [req.user.id]);
+  res.json({ user: rows[0] });
 });
 
 // Cars
@@ -281,6 +313,13 @@ app.post('/api/cars', authenticate, async (req, res) => {
   const { make, model, year, trim, price, mileage, transmission, fuel_type, fuelType, engine, exterior_color, exteriorColor, interior_color, interiorColor, vin, condition, description, body_style, bodyStyle, drivetrain, city, state, zip, latitude, longitude, images } = req.body;
   try {
     await req.db.query('BEGIN');
+    // Check listing limit for dealer role
+    const userCheck = await req.db.query('SELECT u.role, u.listings_used, t.listings_limit FROM users u LEFT JOIN subscription_tiers t ON u.subscription_tier_id = t.id WHERE u.id = $1', [req.user.id]);
+    const { role, listings_used, listings_limit } = userCheck.rows[0];
+    if (listings_used >= listings_limit) {
+      await req.db.query('ROLLBACK');
+      return res.status(403).json({ message: 'Listing limit reached. Upgrade your plan to list more cars.', listings_used, listings_limit });
+    }
     const ft = fuel_type || fuelType; const ec = exterior_color || exteriorColor; const ic = interior_color || interiorColor;
     const bs = body_style || bodyStyle;
     const dt = drivetrain;
@@ -292,6 +331,7 @@ app.post('/api/cars', authenticate, async (req, res) => {
       await req.db.query('INSERT INTO car_images (car_id, url, public_id, position) VALUES ($1,$2,$3,$4)', [car.id, url, pid, i]);
     }
     await req.db.query('COMMIT');
+    await req.db.query('UPDATE users SET listings_used = listings_used + 1 WHERE id = $1', [req.user.id]);
     res.status(201).json(car);
   } catch (err) { await req.db.query('ROLLBACK'); res.status(500).json({ message: 'Failed' }); }
 });
@@ -330,6 +370,23 @@ app.patch('/api/cars/:id', authenticate, async (req, res) => {
   } catch (err) { await req.db.query('ROLLBACK'); res.status(500).json({ message: 'Failed to update car' }); }
 });
 
+app.delete('/api/cars/:id', authenticate, async (req, res) => {
+  try {
+    const car = await req.db.query('SELECT * FROM cars WHERE id = $1 AND seller_id = $2', [req.params.id, req.user.id]);
+    if (!car.rows.length) {
+      const exists = await req.db.query('SELECT 1 FROM cars WHERE id = $1', [req.params.id]);
+      if (!exists.rows.length) return res.status(404).json({ message: 'Car not found' });
+      return res.status(403).json({ message: 'Only the seller can delete this car' });
+    }
+    await req.db.query('DELETE FROM cars WHERE id = $1', [req.params.id]);
+    await req.db.query('UPDATE users SET listings_used = GREATEST(0, listings_used - 1) WHERE id = $1', [req.user.id]);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('DELETE /api/cars/:id error:', err);
+    res.status(500).json({ message: 'Failed to delete car' });
+  }
+});
+
 // Upload
 app.post('/api/upload', authenticate, upload.single('image'), async (req, res) => {
   try {
@@ -357,6 +414,120 @@ app.post('/api/orders/confirm', authenticate, async (req, res) => {
   await req.db.query('INSERT INTO orders (car_id, buyer_id, seller_id, amount, payment_intent_id, status) VALUES ($1,$2,$3,$4,$5,$6)', [carId, req.user.id, intent.metadata.sellerId, intent.amount, paymentIntentId, 'completed']);
   await req.db.query('COMMIT');
   res.json({ success: true });
+});
+
+// Subscriptions
+app.get('/api/subscription', authenticate, async (req, res) => {
+  const { rows } = await req.db.query('SELECT u.subscription_tier_id, u.subscription_status, u.listings_used, u.current_period_end, u.stripe_customer_id, t.name as tier_name, t.slug as tier_slug, t.listings_limit, t.price_monthly_cents, t.stripe_price_id FROM users u LEFT JOIN subscription_tiers t ON u.subscription_tier_id = t.id WHERE u.id = $1', [req.user.id]);
+  res.json(rows[0] || { subscription_tier_id: 1, tier_name: 'Free', listings_limit: 1, listings_used: 0 });
+});
+
+app.post('/api/subscription/create-checkout', authenticate, async (req, res) => {
+  const { priceId } = req.body;
+  if (!priceId) return res.status(400).json({ message: 'priceId required' });
+  try {
+    const { rows } = await req.db.query('SELECT stripe_customer_id FROM users WHERE id = $1', [req.user.id]);
+    const customerId = rows[0]?.stripe_customer_id;
+    if (!customerId) return res.status(400).json({ message: 'No Stripe customer. Try re-registering.' });
+    const session = await stripe.checkout.sessions.create({
+      customer: customerId,
+      mode: 'subscription',
+      payment_method_types: ['card'],
+      line_items: [{ price: priceId, quantity: 1 }],
+      success_url: `${process.env.CLIENT_URL}/dashboard?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.CLIENT_URL}/pricing`,
+      metadata: { userId: String(req.user.id) }
+    });
+    res.json({ url: session.url });
+  } catch (err) {
+    console.error('Checkout session error:', err);
+    res.status(500).json({ message: 'Failed to create checkout session' });
+  }
+});
+
+app.post('/api/subscription/portal', authenticate, async (req, res) => {
+  try {
+    const { rows } = await req.db.query('SELECT stripe_customer_id FROM users WHERE id = $1', [req.user.id]);
+    const customerId = rows[0]?.stripe_customer_id;
+    if (!customerId) return res.status(400).json({ message: 'No Stripe customer' });
+    const session = await stripe.billingPortal.sessions.create({
+      customer: customerId,
+      return_url: `${process.env.CLIENT_URL}/dashboard`
+    });
+    res.json({ url: session.url });
+  } catch (err) {
+    console.error('Portal session error:', err);
+    res.status(500).json({ message: 'Failed to create portal session' });
+  }
+});
+
+// Stripe webhook
+app.post('/api/stripe/webhook', async (req, res) => {
+  let event;
+  try {
+    const sig = req.headers['stripe-signature'];
+    const buf = Buffer.from(req.rawBody, 'utf8');
+    event = stripe.webhooks.constructEvent(buf, sig, process.env.STRIPE_WEBHOOK_SECRET);
+  } catch (err) {
+    console.error('Webhook signature error:', err.message);
+    return res.status(400).json({ message: 'Invalid signature' });
+  }
+  try {
+    switch (event.type) {
+      case 'checkout.session.completed': {
+        const session = event.data.object;
+        const userId = parseInt(session.metadata.userId);
+        if (!userId) break;
+        // Look up which price was purchased and set tier
+        const lineItems = await stripe.checkout.sessions.listLineItems(session.id);
+        const priceId = lineItems.data[0]?.price?.id;
+        if (priceId) {
+          const { rows } = await req.db.query('SELECT id, listings_limit FROM subscription_tiers WHERE stripe_price_id = $1', [priceId]);
+          if (rows.length) {
+            const subscription = await stripe.subscriptions.retrieve(session.subscription);
+            await req.db.query(
+              "UPDATE users SET subscription_tier_id = $1, subscription_status = 'active', listings_used = 0, current_period_end = to_timestamp($2) WHERE id = $3",
+              [rows[0].id, subscription.current_period_end, userId]
+            );
+          }
+        }
+        break;
+      }
+      case 'customer.subscription.updated': {
+        const sub = event.data.object;
+        const customerId = sub.customer;
+        const priceId = sub.items.data[0]?.price?.id;
+        const { rows } = await req.db.query('SELECT id FROM subscription_tiers WHERE stripe_price_id = $1', [priceId]);
+        if (rows.length) {
+          await req.db.query(
+            "UPDATE users SET subscription_tier_id = $1, subscription_status = $2, current_period_end = to_timestamp($3) WHERE stripe_customer_id = $4",
+            [rows[0].id, sub.status, sub.current_period_end, customerId]
+          );
+        }
+        break;
+      }
+      case 'customer.subscription.deleted': {
+        const delSub = event.data.object;
+        await req.db.query(
+          "UPDATE users SET subscription_tier_id = 1, subscription_status = 'canceled', listings_used = 0 WHERE stripe_customer_id = $1",
+          [delSub.customer]
+        );
+        break;
+      }
+      case 'invoice.payment_succeeded': {
+        const invoice = event.data.object;
+        if (invoice.billing_reason === 'subscription_cycle') {
+          // Reset listings_used on billing renewal
+          await req.db.query("UPDATE users SET listings_used = 0 WHERE stripe_customer_id = $1", [invoice.customer]);
+        }
+        break;
+      }
+    }
+    res.json({ received: true });
+  } catch (err) {
+    console.error('Webhook handler error:', err);
+    res.status(500).json({ message: 'Webhook handler failed' });
+  }
 });
 
 // Messages
@@ -519,7 +690,7 @@ app.delete('/api/admin/cars/:id', authenticate, requireAdmin, async (req, res) =
 });
 
 app.get('/api/admin/users', authenticate, requireAdmin, async (req, res) => {
-  const { rows } = await req.db.query('SELECT u.*, COUNT(c.id) as listing_count FROM users u LEFT JOIN cars c ON u.id = c.seller_id GROUP BY u.id ORDER BY u.created_at DESC');
+  const { rows } = await req.db.query('SELECT u.*, t.name as tier_name, t.listings_limit, COUNT(c.id) as listing_count FROM users u LEFT JOIN cars c ON u.id = c.seller_id LEFT JOIN subscription_tiers t ON u.subscription_tier_id = t.id GROUP BY u.id, t.name, t.listings_limit ORDER BY u.created_at DESC');
   res.json(rows);
 });
 
